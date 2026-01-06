@@ -34,9 +34,9 @@ UICorner.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -110, 0, 40)
 Title.BackgroundTransparency = 1
-Title.Text = "  RESTRAINT CONTROL By Sky!" -- Updated Title
+Title.Text = "  RESTRAINT CONTROL By Sky!"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 13 -- Adjusted slightly for length
+Title.TextSize = 13
 Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Position = UDim2.new(0, 10, 0, 0)
@@ -128,13 +128,17 @@ local function CreateActionButton(text, tool, action, color)
     end)
 end
 
--- Button Colors default to grey
+-- Full Actions List
 CreateActionButton("Arrest (Cuffs)", "Metal Cuffs", "ArrestPrompt")
 CreateActionButton("Detain", "Metal Cuffs", "Detain")
 CreateActionButton("Grab", "Metal Cuffs", "Grab")
 CreateActionButton("Pin", "Metal Cuffs", "Pin")
+CreateActionButton("Kneel", "Metal Cuffs", "Kneel") -- New Kneel button
+CreateActionButton("Carry", "Rope", "Carry")       -- New Carry button
+CreateActionButton("Rope", "Rope", "Rope")         -- New Rope button
 CreateActionButton("Muffle", "Muffler", "Muffle")
-CreateActionButton("Blindfold", "Hood", "Blindfold")
+CreateActionButton("Hood", "Hood", "Blindfold")
+CreateActionButton("Blindfold", "Blindfold", "Blindfold")
 
 local function UpdateList()
     for _, child in pairs(PlayerList:GetChildren()) do
