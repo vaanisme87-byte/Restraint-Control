@@ -113,6 +113,12 @@ local function CreateActionButton(text, tool, action, color)
     Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
 
     Btn.MouseButton1Click:Connect(function()
+        -- SPECIAL CASE: Attach (Collar)
+        if action == "Attach" then
+            ActionRemote:FireServer("Attach", "Collar", workspace:WaitForChild("Pole"))
+            return
+        end
+
         local targets = GetTargets()
         if #targets == 0 then return end
         for _, p in pairs(targets) do
@@ -128,14 +134,17 @@ local function CreateActionButton(text, tool, action, color)
     end)
 end
 
--- Full Actions List
+-- Actions List
 CreateActionButton("Arrest (Cuffs)", "Metal Cuffs", "ArrestPrompt")
 CreateActionButton("Detain", "Metal Cuffs", "Detain")
 CreateActionButton("Grab", "Metal Cuffs", "Grab")
 CreateActionButton("Pin", "Metal Cuffs", "Pin")
-CreateActionButton("Kneel", "Metal Cuffs", "Kneel") -- New Kneel button
-CreateActionButton("Carry", "Rope", "Carry")       -- New Carry button
-CreateActionButton("Rope", "Rope", "Rope")         -- New Rope button
+CreateActionButton("Kneel", "Metal Cuffs", "Kneel")
+CreateActionButton("Carry", "Rope", "Carry")
+CreateActionButton("Rope", "Rope", "Rope")
+CreateActionButton("Collar", "Collar", "Collar")
+CreateActionButton("Chain (Collar)", "Collar", "Chain")
+CreateActionButton("Attach (Collar)", "Collar", "Attach") -- Fires exactly as requested
 CreateActionButton("Muffle", "Muffler", "Muffle")
 CreateActionButton("Hood", "Hood", "Blindfold")
 CreateActionButton("Blindfold", "Blindfold", "Blindfold")
