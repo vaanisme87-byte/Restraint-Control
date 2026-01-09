@@ -63,24 +63,30 @@ MinimizeBtn.Font = Enum.Font.GothamBold
 MinimizeBtn.Parent = MainFrame
 Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 6)
 
+-- Player List with Automatic Scaling
 local PlayerList = Instance.new("ScrollingFrame")
 PlayerList.Size = UDim2.new(0.4, -10, 1, -50)
 PlayerList.Position = UDim2.new(0, 5, 0, 45)
 PlayerList.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 PlayerList.BorderSizePixel = 0
 PlayerList.ScrollBarThickness = 2
+PlayerList.AutomaticCanvasSize = Enum.AutomaticSize.Y -- Fixed: Allows infinite scrolling
+PlayerList.CanvasSize = UDim2.new(0, 0, 0, 0)
 PlayerList.Parent = MainFrame
 
 local UIListLayout = Instance.new("UIListLayout")
 UIListLayout.Padding = UDim.new(0, 2)
 UIListLayout.Parent = PlayerList
 
+-- Actions Frame with Automatic Scaling
 local ActionsFrame = Instance.new("ScrollingFrame")
 ActionsFrame.Size = UDim2.new(0.6, -5, 1, -50)
 ActionsFrame.Position = UDim2.new(0.4, 0, 0, 45)
 ActionsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 ActionsFrame.BorderSizePixel = 0
 ActionsFrame.ScrollBarThickness = 2
+ActionsFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y -- Fixed: Allows infinite scrolling
+ActionsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 ActionsFrame.Parent = MainFrame
 
 local ActionLayout = Instance.new("UIListLayout")
@@ -113,7 +119,6 @@ local function CreateActionButton(text, tool, action, color)
     Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
 
     Btn.MouseButton1Click:Connect(function()
-        -- SPECIAL CASE: Attach (Collar)
         if action == "Attach" then
             ActionRemote:FireServer("Attach", "Collar", workspace:WaitForChild("Pole"))
             return
@@ -144,7 +149,7 @@ CreateActionButton("Carry", "Rope", "Carry")
 CreateActionButton("Rope", "Rope", "Rope")
 CreateActionButton("Collar", "Collar", "Collar")
 CreateActionButton("Chain (Collar)", "Collar", "Chain")
-CreateActionButton("Attach (Collar)", "Collar", "Attach") -- Fires exactly as requested
+CreateActionButton("Attach (Collar)", "Collar", "Attach")
 CreateActionButton("Muffle", "Muffler", "Muffle")
 CreateActionButton("Hood", "Hood", "Blindfold")
 CreateActionButton("Blindfold", "Blindfold", "Blindfold")
