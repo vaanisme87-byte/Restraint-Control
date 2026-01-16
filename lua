@@ -13,17 +13,23 @@ local TargetPlayer = nil
 local TargetAll = false
 local LoopTieActive = false
 local IsProcessingTie = false
-local IsSelfTargeted = false
+
+-- Anti Rejoin Logic
+local AntiRejoinActive = false
+local LockedTargetUserId = nil
+local LockedTargetName = "None"
 
 -- GUI Setup
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "RestraintControl_Sky"
 ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 2147483647 -- Makes it always on top
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 -- Status Tracker UI (Top Right)
 local StatusFrame = Instance.new("Frame")
-StatusFrame.Size = UDim2.new(0, 220, 0, 180)
+StatusFrame.Size = UDim2.new(0, 220, 0, 195)
 StatusFrame.Position = UDim2.new(1, -230, 0, 10)
 StatusFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 StatusFrame.BackgroundTransparency = 0.2
@@ -32,7 +38,8 @@ StatusFrame.Parent = ScreenGui
 Instance.new("UICorner", StatusFrame).CornerRadius = UDim.new(0, 8)
 
 local StatusTitle = Instance.new("TextLabel")
-StatusTitle.Size = UDim2.new(1, 0, 0, 25)
+StatusTitle.Size = UDim2.new(1, -30, 0, 25)
+StatusTitle.Position = UDim2.new(0, 5, 0, 0)
 StatusTitle.BackgroundTransparency = 1
 StatusTitle.Text = "TARGET STATUS"
 StatusTitle.TextColor3 = Color3.fromRGB(150, 150, 150)
@@ -46,11 +53,38 @@ StatusText.Position = UDim2.new(0, 10, 0, 25)
 StatusText.BackgroundTransparency = 1
 StatusText.TextColor3 = Color3.fromRGB(255, 255, 255)
 StatusText.Font = Enum.Font.Code
-StatusText.TextSize = 15
+StatusText.TextSize = 14
 StatusText.TextXAlignment = Enum.TextXAlignment.Left
 StatusText.TextYAlignment = Enum.TextYAlignment.Top
 StatusText.Text = "Please select a player..."
 StatusText.Parent = StatusFrame
+
+-- Tracker Minimize Button
+local TrackerMinBtn = Instance.new("TextButton")
+TrackerMinBtn.Size = UDim2.new(0, 20, 0, 20)
+TrackerMinBtn.Position = UDim2.new(1, -25, 0, 5)
+TrackerMinBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+TrackerMinBtn.Text = "-"
+TrackerMinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+TrackerMinBtn.Font = Enum.Font.GothamBold
+TrackerMinBtn.Parent = StatusFrame
+Instance.new("UICorner", TrackerMinBtn).CornerRadius = UDim.new(0, 4)
+
+local TrackerMinimized = false
+TrackerMinBtn.MouseButton1Click:Connect(function()
+    TrackerMinimized = not TrackerMinimized
+    if TrackerMinimized then
+        StatusFrame.BackgroundTransparency = 1
+        StatusTitle.Visible = false
+        StatusText.Visible = false
+        TrackerMinBtn.Text = "+"
+    else
+        StatusFrame.BackgroundTransparency = 0.2
+        StatusTitle.Visible = true
+        StatusText.Visible = true
+        TrackerMinBtn.Text = "-"
+    end
+end)
 
 -- Main Control Frame
 local MainFrame = Instance.new("Frame")
@@ -109,9 +143,9 @@ PlayerList.AutomaticCanvasSize = Enum.AutomaticSize.Y
 PlayerList.CanvasSize = UDim2.new(0,0,0,0)
 PlayerList.Parent = MainFrame
 
-local UIListLayout = Instance.new("UIListLayout")
-UIListLayout.Padding = UDim.new(0, 2)
-UIListLayout.Parent = PlayerList
+local ActionListLayout = Instance.new("UIListLayout")
+ActionListLayout.Padding = UDim.new(0, 2)
+ActionListLayout.Parent = PlayerList
 
 local ActionsFrame = Instance.new("ScrollingFrame")
 ActionsFrame.Size = UDim2.new(0.6, -5, 1, -50)
@@ -123,10 +157,10 @@ ActionsFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 ActionsFrame.CanvasSize = UDim2.new(0,0,0,0)
 ActionsFrame.Parent = MainFrame
 
-local ActionLayout = Instance.new("UIListLayout")
-ActionLayout.Padding = UDim.new(0, 5)
-ActionLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-ActionLayout.Parent = ActionsFrame
+local ButtonsLayout = Instance.new("UIListLayout")
+ButtonsLayout.Padding = UDim.new(0, 5)
+ButtonsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+ButtonsLayout.Parent = ActionsFrame
 
 -- Logic Functions
 local function checkState(char, stateName)
@@ -140,32 +174,43 @@ local function checkState(char, stateName)
     return false
 end
 
--- Reactive Loop Tie Execution
+local function FireRestraintSequence(char)
+    if not char or IsProcessingTie then return end
+    IsProcessingTie = true
+    ActionRemote:FireServer("Kneel", "Metal Cuffs", char)
+    ActionRemote:FireServer("Pin", "Metal Cuffs", char)
+    ActionRemote:FireServer("Rope", "Rope", char)
+    ActionRemote:FireServer("Muffle", "Muffler", char)
+    ActionRemote:FireServer("Blindfold", "Blindfold", char)
+    ActionRemote:FireServer("Blindfold", "Hood", char)
+    GUIRemote:InvokeServer("Add", char)
+    ActionRemote:FireServer("Detain", "Metal Cuffs", char)
+    task.spawn(function()
+        local timeout = 0
+        repeat 
+            task.wait(0.5)
+            timeout = timeout + 1
+        until (checkState(char, "Tied") or checkState(char, "Roped") or timeout > 10 or not (LoopTieActive or AntiRejoinActive))
+        IsProcessingTie = false
+    end)
+end
+
+-- Reactive Background Loop
 task.spawn(function()
     while true do
         task.wait(0.3)
-        if LoopTieActive and TargetPlayer and TargetPlayer.Character then
-            local char = TargetPlayer.Character
-            local isDetained = checkState(char, "Detained") or checkState(char, "Cuffed") or checkState(char, "Metal Cuffs")
-            local isTied = checkState(char, "Tied") or checkState(char, "Rope")
-            
-            if not isDetained and not isTied and not IsProcessingTie then
-                IsProcessingTie = true
-                ActionRemote:FireServer("Rope", "Rope", char)
-                ActionRemote:FireServer("Muffle", "Muffler", char)
-                ActionRemote:FireServer("Blindfold", "Blindfold", char)
-                ActionRemote:FireServer("Blindfold", "Hood", char)
-                GUIRemote:InvokeServer("Add", char)
-                ActionRemote:FireServer("Detain", "Metal Cuffs", char)
-                task.spawn(function()
-                    local timeout = 0
-                    repeat 
-                        task.wait(0.5)
-                        timeout = timeout + 1
-                    until (checkState(char, "Tied") or not LoopTieActive or not TargetPlayer or timeout > 10)
-                    IsProcessingTie = false
-                end)
+        local activeChar = nil
+        if AntiRejoinActive and LockedTargetUserId then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p.UserId == LockedTargetUserId then activeChar = p.Character break end
             end
+        elseif LoopTieActive and TargetPlayer and TargetPlayer.Character then
+            activeChar = TargetPlayer.Character
+        end
+        if activeChar then
+            local isDetained = checkState(activeChar, "Detained") or checkState(activeChar, "Cuffed") or checkState(activeChar, "Metal Cuffs")
+            local isRoped = checkState(activeChar, "Tied") or checkState(activeChar, "Rope") or checkState(activeChar, "Roped")
+            if not isDetained and not isRoped then FireRestraintSequence(activeChar) end
         end
     end
 end)
@@ -177,9 +222,7 @@ local function GetTargets()
             if p ~= LocalPlayer then table.insert(t, p) end
         end
         return t
-    elseif TargetPlayer then
-        return {TargetPlayer}
-    end
+    elseif TargetPlayer then return {TargetPlayer} end
     return {}
 end
 
@@ -219,16 +262,23 @@ RunService.RenderStepped:Connect(function()
     local target = TargetPlayer
     if target and target.Character then
         local char = target.Character
-        StatusTitle.Text = (target == LocalPlayer and "[SELF] " or "[SELECTED] ") .. target.DisplayName
+        local prefix = (target == LocalPlayer) and "[SELF] " or (AntiRejoinActive and LockedTargetUserId == target.UserId and "[LOCKED] " or "[SELECTED] ")
+        StatusTitle.Text = prefix .. target.DisplayName
+        
         local isDetained = checkState(char, "Detained") or checkState(char, "Cuffed") or checkState(char, "Metal Cuffs")
         local isMuffled = checkState(char, "Muffled") or checkState(char, "Muffler") or checkState(char, "Muffle")
-        local isBlinded = checkState(char, "Hooded") or checkState(char, "Blindfolded") or checkState(char, "Hood") or checkState(char, "Blindfold")
-        local isTied = checkState(char, "Tied") or checkState(char, "Rope")
+        local isBlindfolded = checkState(char, "Blindfolded") or checkState(char, "Blindfold")
+        local isHooded = checkState(char, "Hooded") or checkState(char, "Hood")
+        local isRoped = checkState(char, "Tied") or checkState(char, "Rope") or checkState(char, "Roped")
         local isCollared = checkState(char, "Collared") or checkState(char, "Collar")
 
-        StatusText.Text = string.format("detained = %s\nmuffled  = %s\nblinded  = %s\ntied     = %s\ncollared = %s",
-            tostring(isDetained), tostring(isMuffled), tostring(isBlinded), tostring(isTied), tostring(isCollared))
-        StatusText.TextColor3 = (isDetained or isMuffled or isBlinded or isTied or isCollared) and Color3.fromRGB(255, 200, 0) or Color3.fromRGB(255, 255, 255)
+        StatusText.Text = string.format("Detained    = %s\nMuffled     = %s\nBlindfolded = %s\nHooded      = %s\nRoped       = %s\nCollared    = %s",
+            tostring(isDetained), tostring(isMuffled), tostring(isBlindfolded), tostring(isHooded), tostring(isRoped), tostring(isCollared))
+        StatusText.TextColor3 = (isDetained or isMuffled or isBlindfolded or isHooded or isRoped or isCollared) and Color3.fromRGB(255, 200, 0) or Color3.fromRGB(255, 255, 255)
+    elseif AntiRejoinActive and LockedTargetUserId then
+        StatusTitle.Text = "[LOCKED] " .. LockedTargetName
+        StatusText.Text = "Status: OFFLINE\nTracking player..."
+        StatusText.TextColor3 = Color3.fromRGB(150, 150, 150)
     else
         StatusTitle.Text = "NO TARGET"
         StatusText.Text = "Please select a player\nto track their status."
@@ -252,10 +302,7 @@ CreateActionButton("Hood", "Hood", "Blindfold")
 CreateActionButton("Blindfold", "Blindfold", "Blindfold")
 
 local function UpdateList()
-    for _, child in pairs(PlayerList:GetChildren()) do
-        if child:IsA("TextButton") then child:Destroy() end
-    end
-
+    for _, child in pairs(PlayerList:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
     local AllBtn = Instance.new("TextButton")
     AllBtn.Size = UDim2.new(1, 0, 0, 30)
     AllBtn.BackgroundColor3 = TargetAll and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(45, 45, 50)
@@ -268,10 +315,9 @@ local function UpdateList()
         TargetAll = not TargetAll
         TargetPlayer = nil
         LoopTieActive = false
-        IsSelfTargeted = false
+        AntiRejoinActive = false
         UpdateList()
     end)
-
     local LoopBtn = Instance.new("TextButton")
     LoopBtn.Size = UDim2.new(1, 0, 0, 30)
     LoopBtn.BackgroundColor3 = LoopTieActive and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(45, 45, 50)
@@ -280,14 +326,23 @@ local function UpdateList()
     LoopBtn.Font = Enum.Font.GothamBold
     LoopBtn.TextSize = 10
     LoopBtn.Parent = PlayerList
-    LoopBtn.MouseButton1Click:Connect(function()
-        if TargetPlayer then
-            LoopTieActive = not LoopTieActive
-            TargetAll = false
+    LoopBtn.MouseButton1Click:Connect(function() if TargetPlayer then LoopTieActive = not LoopTieActive TargetAll = false UpdateList() end end)
+    local AntiBtn = Instance.new("TextButton")
+    AntiBtn.Size = UDim2.new(1, 0, 0, 30)
+    AntiBtn.BackgroundColor3 = AntiRejoinActive and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(45, 45, 50)
+    AntiBtn.Text = "ANTI REJOIN TIE"
+    AntiBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    AntiBtn.Font = Enum.Font.GothamBold
+    AntiBtn.TextSize = 10
+    AntiBtn.Parent = PlayerList
+    AntiBtn.MouseButton1Click:Connect(function()
+        if TargetPlayer and TargetPlayer ~= LocalPlayer then
+            AntiRejoinActive = not AntiRejoinActive
+            LockedTargetUserId = AntiRejoinActive and TargetPlayer.UserId or nil
+            LockedTargetName = AntiRejoinActive and TargetPlayer.DisplayName or "None"
             UpdateList()
-        end
+        elseif not TargetPlayer and AntiRejoinActive then AntiRejoinActive = false LockedTargetUserId = nil UpdateList() end
     end)
-
     local SelfBtn = Instance.new("TextButton")
     SelfBtn.Size = UDim2.new(1, 0, 0, 30)
     SelfBtn.BackgroundColor3 = (TargetPlayer == LocalPlayer) and Color3.fromRGB(60, 200, 100) or Color3.fromRGB(45, 45, 50)
@@ -296,17 +351,7 @@ local function UpdateList()
     SelfBtn.Font = Enum.Font.GothamBold
     SelfBtn.TextSize = 10
     SelfBtn.Parent = PlayerList
-    SelfBtn.MouseButton1Click:Connect(function()
-        TargetAll = false
-        if TargetPlayer == LocalPlayer then
-            TargetPlayer = nil
-            LoopTieActive = false
-        else
-            TargetPlayer = LocalPlayer
-        end
-        UpdateList()
-    end)
-
+    SelfBtn.MouseButton1Click:Connect(function() TargetAll = false AntiRejoinActive = false if TargetPlayer == LocalPlayer then TargetPlayer = nil LoopTieActive = false else TargetPlayer = LocalPlayer end UpdateList() end)
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
             local PBtn = Instance.new("TextButton")
@@ -318,12 +363,9 @@ local function UpdateList()
             PBtn.TextSize = 11
             PBtn.Parent = PlayerList
             PBtn.MouseButton1Click:Connect(function()
-                if TargetPlayer == p then
-                    TargetPlayer = nil
-                    LoopTieActive = false
-                else
-                    TargetAll = false
-                    TargetPlayer = p
+                if TargetPlayer == p then TargetPlayer = nil LoopTieActive = false AntiRejoinActive = false else
+                    TargetAll = false TargetPlayer = p
+                    if AntiRejoinActive then LockedTargetUserId = p.UserId LockedTargetName = p.DisplayName end
                 end
                 UpdateList()
             end)
@@ -332,22 +374,18 @@ local function UpdateList()
 end
 
 UpdateList()
-Players.PlayerAdded:Connect(UpdateList)
-Players.PlayerRemoving:Connect(function(plr)
-    if TargetPlayer == plr then TargetPlayer = nil LoopTieActive = false end
-    UpdateList()
-end)
+Players.PlayerAdded:Connect(function(plr) if AntiRejoinActive and LockedTargetUserId and plr.UserId == LockedTargetUserId then TargetPlayer = plr end UpdateList() end)
+Players.PlayerRemoving:Connect(function(plr) if TargetPlayer == plr and not AntiRejoinActive then TargetPlayer = nil LoopTieActive = false end UpdateList() end)
 
-local Minimized = false
+-- Main GUI Minimization
+local MainMinimized = false
 local SavedSize = MainFrame.Size
-
 MinimizeBtn.MouseButton1Click:Connect(function()
-    Minimized = not Minimized
-    if Minimized then
+    MainMinimized = not MainMinimized
+    if MainMinimized then
         SavedSize = MainFrame.Size
         MainFrame.Size = UDim2.new(0, 350, 0, 40)
         MinimizeBtn.Text = "+"
-        StatusFrame.Visible = false
         for _, child in pairs(MainFrame:GetChildren()) do
             if child:IsA("GuiObject") and child ~= Title and child ~= CloseBtn and child ~= MinimizeBtn then
                 child.Visible = false
@@ -356,16 +394,15 @@ MinimizeBtn.MouseButton1Click:Connect(function()
     else
         MainFrame.Size = SavedSize
         MinimizeBtn.Text = "-"
-        StatusFrame.Visible = true
         for _, child in pairs(MainFrame:GetChildren()) do
             if child:IsA("GuiObject") then child.Visible = true end
         end
     end
 end)
 
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if not gpe and input.KeyCode == Enum.KeyCode.Insert then
-        MainFrame.Visible = not MainFrame.Visible
-        StatusFrame.Visible = MainFrame.Visible
-    end
+UserInputService.InputBegan:Connect(function(input, gpe) 
+    if not gpe and input.KeyCode == Enum.KeyCode.Insert then 
+        MainFrame.Visible = not MainFrame.Visible 
+        StatusFrame.Visible = MainFrame.Visible 
+    end 
 end)
