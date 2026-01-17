@@ -33,6 +33,9 @@ local blacklist = {
     ["gigizcc"] = true,
     ["Sickboyundertale"] = true,
     ["brunogmer8436"] = true,
+     ["polkyutw"] = true,
+     ["shiestymark127"] = true,
+     ["guest826_7"] = true,
 }
 
 local blacklistedProcessed = {} 
