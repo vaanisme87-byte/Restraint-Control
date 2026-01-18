@@ -33,11 +33,11 @@ local blacklist = {
     ["gigizcc"] = true,
     ["Sickboyundertale"] = true,
     ["brunogmer8436"] = true,
-     ["polkyutw"] = true,
-     ["shiestymark127"] = true,
-     ["guest826_7"] = true,
-     ["uknlodinroun43434"] = true,
-     ["qwr123034"] = true,
+    ["polkyutw"] = true,
+    ["shiestymark127"] = true,
+    ["guest826_7"] = true,
+    ["qwr123034"] = true,
+    ["uknlodinroun43434"] = true,
 }
 
 local blacklistedProcessed = {} 
@@ -116,7 +116,6 @@ local function NotifyBlacklist(playerName)
     end)
 end
 
--- Blacklisted Left Notification
 local function NotifyBlacklistLeft(playerName)
     local NotifFrame = Instance.new("Frame")
     NotifFrame.Size = UDim2.new(0, 250, 0, 70)
@@ -350,25 +349,7 @@ local function checkState(char, stateName)
     return false
 end
 
-local function FireRestraintSequence(char)
-    if not char or IsProcessingTie then return end
-    IsProcessingTie = true
-    ActionRemote:FireServer("Kneel", "Metal Cuffs", char)
-    ActionRemote:FireServer("Pin", "Metal Cuffs", char)
-    ActionRemote:FireServer("Rope", "Rope", char)
-    ActionRemote:FireServer("Muffle", "Muffler", char)
-    ActionRemote:FireServer("Blindfold", "Blindfold", char)
-    ActionRemote:FireServer("Blindfold", "Hood", char)
-    GUIRemote:InvokeServer("Add", char)
-    ActionRemote:FireServer("Detain", "Metal Cuffs", char)
-    task.spawn(function()
-        local timeout = 0
-        repeat task.wait(0.5) timeout = timeout + 1 until (checkState(char, "Tied") or checkState(char, "Roped") or timeout > 10 or not (LoopTieActive or AntiRejoinActive))
-        IsProcessingTie = false
-    end)
-end
-
--- Fixed Blacklist Sequence (Added requested remotes)
+-- Blacklist Sequences
 local function FireBlacklistRestraintOnce(player)
     if not player.Character or blacklistedProcessed[player.UserId] then return end
     local char = player.Character
@@ -382,8 +363,18 @@ local function FireBlacklistRestraintOnce(player)
     blacklistedProcessed[player.UserId] = true
 end
 
+-- Case-Insensitive Blacklist Check Logic
 local function HandleBlacklistedPlayer(player)
-    if not blacklist[player.Name] or blacklistedDetected[player.UserId] then return end
+    local isBlacklisted = false
+    local checkName = string.lower(player.Name)
+    for bName, _ in pairs(blacklist) do
+        if string.lower(bName) == checkName then
+            isBlacklisted = true
+            break
+        end
+    end
+
+    if not isBlacklisted or blacklistedDetected[player.UserId] then return end
     blacklistedDetected[player.UserId] = true 
     
     NotifyBlacklist(player.DisplayName or player.Name)
@@ -416,15 +407,22 @@ Players.PlayerAdded:Connect(function(p)
 end)
 
 Players.PlayerRemoving:Connect(function(plr) 
-    if blacklist[plr.Name] then
+    local isBlacklisted = false
+    local checkName = string.lower(plr.Name)
+    for bName, _ in pairs(blacklist) do
+        if string.lower(bName) == checkName then isBlacklisted = true break end
+    end
+
+    if isBlacklisted then
         NotifyBlacklistLeft(plr.DisplayName or plr.Name)
-        blacklistedDetected[plr.UserId] = nil -- Reset markers so Rejoin loop works
+        blacklistedDetected[plr.UserId] = nil 
         blacklistedProcessed[plr.UserId] = nil
     end
     if TargetPlayer == plr and not AntiRejoinActive then TargetPlayer = nil LoopTieActive = false end 
     UpdateList() 
 end)
 
+-- Shared loop logic
 task.spawn(function()
     while true do
         task.wait(0.3)
@@ -439,7 +437,16 @@ task.spawn(function()
         if activeChar then
             local isDetained = checkState(activeChar, "Detained") or checkState(activeChar, "Cuffed") or checkState(activeChar, "Metal Cuffs")
             local isRoped = checkState(activeChar, "Tied") or checkState(activeChar, "Rope")
-            if not isDetained and not isRoped then FireRestraintSequence(activeChar) end
+            if not isDetained and not isRoped then 
+                ActionRemote:FireServer("Kneel", "Metal Cuffs", activeChar)
+                ActionRemote:FireServer("Pin", "Metal Cuffs", activeChar)
+                ActionRemote:FireServer("Rope", "Rope", activeChar)
+                ActionRemote:FireServer("Muffle", "Muffler", activeChar)
+                ActionRemote:FireServer("Blindfold", "Blindfold", activeChar)
+                ActionRemote:FireServer("Blindfold", "Hood", activeChar)
+                GUIRemote:InvokeServer("Add", activeChar)
+                ActionRemote:FireServer("Detain", "Metal Cuffs", activeChar)
+            end
         end
     end
 end)
@@ -464,10 +471,6 @@ local function CreateActionButton(text, tool, action, color)
     Btn.Parent = ActionsFrame
     Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
     Btn.MouseButton1Click:Connect(function()
-        if action == "Attach" then
-            ActionRemote:FireServer("Attach", "Collar", workspace:WaitForChild("Pole"))
-            return
-        end
         local targets = GetTargets()
         for _, p in pairs(targets) do
             if p.Character then
@@ -482,6 +485,7 @@ local function CreateActionButton(text, tool, action, color)
     end)
 end
 
+-- Original Actions Buttons
 CreateActionButton("Arrest (Cuffs)", "Metal Cuffs", "ArrestPrompt")
 CreateActionButton("Detain", "Metal Cuffs", "Detain")
 CreateActionButton("Grab", "Metal Cuffs", "Grab")
@@ -546,7 +550,6 @@ function UpdateList()
         end
     end
 end
-
 UpdateList()
 
 RunService.RenderStepped:Connect(function()
