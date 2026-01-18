@@ -37,6 +37,7 @@ local blacklist = {
      ["shiestymark127"] = true,
      ["guest826_7"] = true,
      ["uknlodinroun43434"] = true,
+     ["qwr123034"] = true,
 }
 
 local blacklistedProcessed = {} 
